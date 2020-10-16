@@ -10,6 +10,11 @@ import (
 // Link represents a link device from netlink. Shared link attributes
 // like name may be retrieved using the Attrs() method. Unique data
 // can be retrieved by casting the object to the proper type.
+//
+// Link表示来自NetLink的链路设备。
+// 可以使用Attrs()方法检索名称等共享链接属性。
+// 可以通过将对象强制转换为适当的类型来检索唯一数据。
+//
 type Link interface {
 	Attrs() *LinkAttrs
 	Type() string
@@ -21,6 +26,8 @@ type (
 )
 
 // LinkAttrs represents data shared by most link types
+//
+// LinkAttrs表示大多数链接类型共享的数据
 type LinkAttrs struct {
 	Index        int
 	MTU          int
@@ -50,11 +57,14 @@ type LinkAttrs struct {
 }
 
 // LinkSlave represents a slave device.
+//
+// LinkSlave代表从属设备。
 type LinkSlave interface {
 	SlaveType() string
 }
 
 // VfInfo represents configuration of virtual function
+// VfInfo表示虚拟函数的配置
 type VfInfo struct {
 	ID        int
 	Mac       net.HardwareAddr
@@ -69,6 +79,9 @@ type VfInfo struct {
 
 // LinkOperState represents the values of the IFLA_OPERSTATE link
 // attribute, which contains the RFC2863 state of the interface.
+//
+// LinkOperState表示IFLA_OPERSTATE链接属性的值，该属性包含接口的RFC2863状态。
+//
 type LinkOperState uint8
 
 const (
@@ -101,10 +114,11 @@ func (s LinkOperState) String() string {
 }
 
 // NewLinkAttrs returns LinkAttrs structure filled with default values
+//
+// NewLinkAttrs返回填充默认值的LinkAttrs结构
 func NewLinkAttrs() LinkAttrs {
 	return LinkAttrs{
-		NetNsID: -1,
-		TxQLen:  -1,
+		TxQLen: -1,
 	}
 }
 
@@ -197,11 +211,10 @@ type LinkStatistics64 struct {
 }
 
 type LinkXdp struct {
-	Fd         int
-	Attached   bool
-	AttachMode uint32
-	Flags      uint32
-	ProgId     uint32
+	Fd       int
+	Attached bool
+	Flags    uint32
+	ProgId   uint32
 }
 
 // Device links cannot be created via netlink. These links
@@ -248,7 +261,6 @@ func (ifb *Ifb) Type() string {
 type Bridge struct {
 	LinkAttrs
 	MulticastSnooping *bool
-	AgeingTime        *uint32
 	HelloTime         *uint32
 	VlanFiltering     *bool
 }
@@ -317,6 +329,9 @@ type TuntapMode uint16
 type TuntapFlag uint16
 
 // Tuntap links created via /dev/tun/tap, but can be destroyed via netlink
+//
+// 通过/dev/tun/ap创建的TunTAP链接，但可以通过NetLink销毁
+//
 type Tuntap struct {
 	LinkAttrs
 	Mode       TuntapMode
@@ -341,7 +356,6 @@ type Veth struct {
 	LinkAttrs
 	PeerName         string // veth on create only
 	PeerHardwareAddr net.HardwareAddr
-	PeerNamespace    interface{}
 }
 
 func (veth *Veth) Attrs() *LinkAttrs {
@@ -350,19 +364,6 @@ func (veth *Veth) Attrs() *LinkAttrs {
 
 func (veth *Veth) Type() string {
 	return "veth"
-}
-
-// Wireguard represent links of type "wireguard", see https://www.wireguard.com/
-type Wireguard struct {
-	LinkAttrs
-}
-
-func (wg *Wireguard) Attrs() *LinkAttrs {
-	return &wg.LinkAttrs
-}
-
-func (wg *Wireguard) Type() string {
-	return "wireguard"
 }
 
 // GenericLink links represent types that are not currently understood
@@ -895,14 +896,10 @@ type Ip6tnl struct {
 	Remote     net.IP
 	Ttl        uint8
 	Tos        uint8
+	EncapLimit uint8
 	Flags      uint32
 	Proto      uint8
 	FlowInfo   uint32
-	EncapLimit uint8
-	EncapType  uint16
-	EncapFlags uint16
-	EncapSport uint16
-	EncapDport uint16
 }
 
 func (ip6tnl *Ip6tnl) Attrs() *LinkAttrs {
@@ -916,13 +913,11 @@ func (ip6tnl *Ip6tnl) Type() string {
 type Sittun struct {
 	LinkAttrs
 	Link       uint32
+	Local      net.IP
+	Remote     net.IP
 	Ttl        uint8
 	Tos        uint8
 	PMtuDisc   uint8
-	Proto      uint8
-	Local      net.IP
-	Remote     net.IP
-	EncapLimit uint8
 	EncapType  uint16
 	EncapFlags uint16
 	EncapSport uint16

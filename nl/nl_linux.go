@@ -25,6 +25,9 @@ const (
 	// Arbitrary set value (greater than default 4k) to allow receiving
 	// from kernel more verbose messages e.g. for statistics,
 	// tc rules or filters, or other more memory requiring data.
+	//
+	// 任意设置值(大于默认值4k)，以允许从内核接收更详细的消息，例如用于统计、TC规则或过滤器，或其他需要数据的更多内存。
+	//
 	RECEIVE_BUFFER_SIZE = 65536
 	// Kernel netlink pid
 	PidKernel uint32 = 0
@@ -83,11 +86,15 @@ type NetlinkRequestData interface {
 }
 
 // IfInfomsg is related to links, but it is used for list requests as well
+//
+// IfInfomsg与链接相关，但也用于列表请求
 type IfInfomsg struct {
 	unix.IfInfomsg
 }
 
 // Create an IfInfomsg with family specified
+//
+// 使用指定的族创建IfInfomsg
 func NewIfInfomsg(family int) *IfInfomsg {
 	return &IfInfomsg{
 		IfInfomsg: unix.IfInfomsg{
@@ -259,29 +266,6 @@ func NewIfInfomsgChild(parent *RtAttr, family int) *IfInfomsg {
 	return msg
 }
 
-type Uint32Attribute struct {
-	Type  uint16
-	Value uint32
-}
-
-func (a *Uint32Attribute) Serialize() []byte {
-	native := NativeEndian()
-	buf := make([]byte, rtaAlignOf(8))
-	native.PutUint16(buf[0:2], 8)
-	native.PutUint16(buf[2:4], a.Type)
-
-	if a.Type&NLA_F_NET_BYTEORDER != 0 {
-		binary.BigEndian.PutUint32(buf[4:], a.Value)
-	} else {
-		native.PutUint32(buf[4:], a.Value)
-	}
-	return buf
-}
-
-func (a *Uint32Attribute) Len() int {
-	return 8
-}
-
 // Extend RtAttr to handle data and children
 type RtAttr struct {
 	unix.RtAttr
@@ -334,6 +318,9 @@ func (a *RtAttr) Len() int {
 
 // Serialize the RtAttr into a byte array
 // This can't just unsafe.cast because it must iterate through children.
+//
+// 将RtAttr序列化为字节数组，这不能只是unsafe.cast，因为它必须遍历子级。
+//
 func (a *RtAttr) Serialize() []byte {
 	native := NativeEndian()
 
@@ -407,6 +394,10 @@ func (req *NetlinkRequest) AddRawData(data []byte) {
 // Execute the request against a the given sockType.
 // Returns a list of netlink messages in serialized format, optionally filtered
 // by resType.
+//
+// 针对给定的sockType执行请求。
+// 返回序列化格式的NetLink消息列表，可以选择按resType进行筛选。
+//
 func (req *NetlinkRequest) Execute(sockType int, resType uint16) ([][]byte, error) {
 	var (
 		s   *NetlinkSocket
@@ -462,7 +453,10 @@ done:
 			if m.Header.Pid != pid {
 				continue
 			}
-			if m.Header.Type == unix.NLMSG_DONE || m.Header.Type == unix.NLMSG_ERROR {
+			if m.Header.Type == unix.NLMSG_DONE {
+				break done
+			}
+			if m.Header.Type == unix.NLMSG_ERROR {
 				native := NativeEndian()
 				error := int32(native.Uint32(m.Data[0:4]))
 				if error == 0 {
@@ -485,6 +479,33 @@ done:
 // Create a new netlink request from proto and flags
 // Note the Len value will be inaccurate once data is added until
 // the message is serialized
+//
+// 从PROTO和FLAGS创建新的NetLink请求请注意，一旦添加数据，LEN值将不准确，直到消息序列化
+//
+
+/*
+Netlink消息头使用以下格式：（来自RFC 3549的图表 ）：
+
+0                   1                   2                   3
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                          Length                             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|            Type              |           Flags              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      Sequence Number                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                      Process ID (PID)                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+这些字段包含以下信息：
+
+长度（32位）：整个消息的长度，包括标头和有效负载。
+类型（16位）：消息包含什么样的信息，例如错误，多部分消息的结尾等。
+标志（16位）：指示消息是请求，多部分消息，请求确认等的位标志。
+序列号（32位）：用于关联请求和响应的数字。在每个请求上增加。
+进程ID（PID）（32位）：有时称为端口ID；用于唯一标识特定netlink套接字的数字；可能是也可能不是该进程的ID。
+
+*/
 func NewNetlinkRequest(proto, flags int) *NetlinkRequest {
 	return &NetlinkRequest{
 		NlMsghdr: unix.NlMsghdr{
@@ -524,6 +545,11 @@ func getNetlinkSocket(protocol int) (*NetlinkSocket, error) {
 // when done. If curNs is close, the function derives the current namespace and
 // moves back into it when done. If newNs is close, the socket will be opened
 // in the current network namespace.
+//
+// GetNetlinkSocketAt在网络命名空间Newns中打开NetLink套接字，并在完成后将线程定位回Curns指定的网络命名空间。
+// 如果Curns为Close，则该函数派生当前名称空间，并在完成后移回该名称空间。
+// 如果Newns关闭，套接字将在当前网络命名空间中打开。
+//
 func GetNetlinkSocketAt(newNs, curNs netns.NsHandle, protocol int) (*NetlinkSocket, error) {
 	c, err := executeInNetns(newNs, curNs)
 	if err != nil {
@@ -538,6 +564,10 @@ func GetNetlinkSocketAt(newNs, curNs netns.NsHandle, protocol int) (*NetlinkSock
 // otherwise to the current netns at the time the function was invoked
 // In case of success, the caller is expected to execute the returned function
 // at the end of the code that needs to be executed in the network namespace.
+//
+// ecuteInNetns设置这次调用网络名称空间newns之后代码的执行，如果打开，则将线程移回curns，否则将线程移回调用函数时的当前netn。
+// 如果成功，调用方应在需要在网络名称空间中执行的代码末尾执行返回的函数。
+//
 // Example:
 // func jobAt(...) error {
 //      d, err := executeInNetns(...)
@@ -588,6 +618,10 @@ func executeInNetns(newNs, curNs netns.NsHandle) (func(), error) {
 // and subscribe it to multicast groups passed in variable argument list.
 // Returns the netlink socket on which Receive() method can be called
 // to retrieve the messages from the kernel.
+//
+// 创建具有给定协议的NetLink套接字(例如NetLink_ROUTE)，并将其订阅在变量参数列表中传递的多播组。
+// 返回NetLink套接字，可以在该套接字上调用Receive()方法以从内核检索消息。
+//
 func Subscribe(protocol int, groups ...uint) (*NetlinkSocket, error) {
 	fd, err := unix.Socket(unix.AF_NETLINK, unix.SOCK_RAW, protocol)
 	if err != nil {
@@ -613,6 +647,10 @@ func Subscribe(protocol int, groups ...uint) (*NetlinkSocket, error) {
 // SubscribeAt works like Subscribe plus let's the caller choose the network
 // namespace in which the socket would be opened (newNs). Then control goes back
 // to curNs if open, otherwise to the netns at the time this function was called.
+//
+// SubscribeAt的工作方式类似于Subscribe加上让调用者选择将在其中打开套接字的网络名称空间(Newns)。
+// 如果打开，则控制返回到Curns，否则在调用此函数时返回给Net。
+//
 func SubscribeAt(newNs, curNs netns.NsHandle, protocol int, groups ...uint) (*NetlinkSocket, error) {
 	c, err := executeInNetns(newNs, curNs)
 	if err != nil {
@@ -631,6 +669,8 @@ func (s *NetlinkSocket) GetFd() int {
 	return int(atomic.LoadInt32(&s.fd))
 }
 
+// sendto系统调用实际上还是找到该fd对应的socket实例，然后根据其socket类型调用ops->sendmsg;
+// sock->ops->sendmsg(iocb, sock, msg, size);
 func (s *NetlinkSocket) Send(request *NetlinkRequest) error {
 	fd := int(atomic.LoadInt32(&s.fd))
 	if fd < 0 {
@@ -767,6 +807,9 @@ func netlinkRouteAttrAndValue(b []byte) (*unix.RtAttr, []byte, int, error) {
 
 // SocketHandle contains the netlink socket and the associated
 // sequence counter for a specific netlink family
+//
+// SocketHandle包含特定NetLink系列的NetLink套接字和关联的序列计数器
+//
 type SocketHandle struct {
 	Seq    uint32
 	Socket *NetlinkSocket

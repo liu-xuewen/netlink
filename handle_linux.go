@@ -10,18 +10,27 @@ import (
 )
 
 // Empty handle used by the netlink package methods
+//
+// NetLink包方法使用的空句柄  ，bridge用的这个句柄
 var pkgHandle = &Handle{}
 
 // Handle is an handle for the netlink requests on a
 // specific network namespace. All the requests on the
 // same netlink family share the same netlink socket,
 // which gets released when the handle is deleted.
+//
+// 句柄是特定网络命名空间上的NetLink请求的句柄。
+// 同一NetLink系列上的所有请求共享相同的NetLink套接字，删除句柄时会释放该套接字。
+//
 type Handle struct {
 	sockets      map[int]*nl.SocketHandle
 	lookupByDump bool
 }
 
 // SupportsNetlinkFamily reports whether the passed netlink family is supported by this Handle
+//
+// SupportsNetlinkFamily报告此句柄是否支持传递的NetLink系列
+//
 func (h *Handle) SupportsNetlinkFamily(nlFamily int) bool {
 	_, ok := h.sockets[nlFamily]
 	return ok
@@ -31,6 +40,11 @@ func (h *Handle) SupportsNetlinkFamily(nlFamily int) bool {
 // Caller may specify the netlink families the handle should support.
 // If no families are specified, all the families the netlink package
 // supports will be automatically added.
+//
+// NewHandle返回当前网络命名空间上的NetLink句柄。
+// 调用者可以指定句柄应该支持的NetLink系列。
+// 如果未指定族，将自动添加NetLink软件包支持的所有族。
+//
 func NewHandle(nlFamilies ...int) (*Handle, error) {
 	return newHandle(netns.None(), netns.None(), nlFamilies...)
 }
@@ -39,6 +53,10 @@ func NewHandle(nlFamilies ...int) (*Handle, error) {
 // netlink handle. Although the socket timeout has granularity of one
 // microsecond, the effective granularity is floored by the kernel timer tick,
 // which default value is four milliseconds.
+//
+// SetSocketTimeout设置NetLink句柄中每个套接字的发送和接收超时。
+// 尽管套接字超时的粒度为1微秒，但有效粒度会被内核计时器计时器计时(默认值为4毫秒)所破坏。
+//
 func (h *Handle) SetSocketTimeout(to time.Duration) error {
 	if to < time.Microsecond {
 		return fmt.Errorf("invalid timeout, minimul value is %s", time.Microsecond)
@@ -128,9 +146,14 @@ func (h *Handle) Delete() {
 	h.sockets = nil
 }
 
+// 设置 Netlink消息头，如果有socket则设置socket
 func (h *Handle) newNetlinkRequest(proto, flags int) *nl.NetlinkRequest {
 	// Do this so that package API still use nl package variable nextSeqNr
+	//
+	// 这样做可以使包API仍然使用NL包变量nextSeqNr
 	if h.sockets == nil {
+		// bridge 的h是pkgHandle，sockets是nil
+		// 设置Netlink消息头
 		return nl.NewNetlinkRequest(proto, flags)
 	}
 	return &nl.NetlinkRequest{
@@ -138,7 +161,21 @@ func (h *Handle) newNetlinkRequest(proto, flags int) *nl.NetlinkRequest {
 			Len:   uint32(unix.SizeofNlMsghdr),
 			Type:  uint16(proto),
 			Flags: unix.NLM_F_REQUEST | uint16(flags),
+			// Todo 注意这里没有Seq，why
 		},
-		Sockets: h.sockets,
+		Sockets: h.sockets,  // 有socket则在request设置socket
 	}
 }
+
+/*
+func NewNetlinkRequest(proto, flags int) *NetlinkRequest {
+	return &NetlinkRequest{
+		NlMsghdr: unix.NlMsghdr{
+			Len:   uint32(unix.SizeofNlMsghdr),
+			Type:  uint16(proto),
+			Flags: unix.NLM_F_REQUEST | uint16(flags),
+			Seq:   atomic.AddUint32(&nextSeqNr, 1),
+		},
+	}
+}
+*/
